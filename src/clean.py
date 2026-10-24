@@ -7,8 +7,21 @@ RAW_PATH = Path(__file__).resolve().parents[1] / "data" / "raw" / "Online Retail
 PRODUCT_CODE = r"^\d{5}[A-Za-z]*$"   # 5 digits + optional letters, e.g. 85123A
 
 
+def normalize_stock_codes(series: pd.Series) -> pd.Series:
+    return series.astype(str).str.strip().str.upper()
+
+
+def load_raw(path=RAW_PATH) -> pd.DataFrame:
+    raw = pd.read_excel(path, engine="openpyxl")
+    raw["StockCode"] = normalize_stock_codes(raw["StockCode"])
+    return raw
+
+
 def match_cancelled_orders(raw: pd.DataFrame) -> tuple[pd.Index, pd.Index]:
-    """Return matched positive-line and cancellation-line indexes."""
+    """Return matched positive-line and cancellation-line indexes.
+
+    StockCode must already be normalised.
+    """
     # Select eligible positive lines and cancellation lines.
     positive_lines = raw.loc[
         raw["Quantity"].gt(0)
@@ -91,9 +104,7 @@ def match_cancelled_orders(raw: pd.DataFrame) -> tuple[pd.Index, pd.Index]:
 def load_clean(
     path=RAW_PATH, verbose=True, exclude_matched_cancellations=True
 ) -> pd.DataFrame:
-    # Load the source and normalize product codes before matching.
-    raw = pd.read_excel(path, engine="openpyxl")
-    raw["StockCode"] = raw["StockCode"].astype(str).str.strip()
+    raw = load_raw(path)
     matched_positive, matched_cancellations = match_cancelled_orders(raw)
 
     # Apply the existing invoice, quantity, price, and product-code filters.
