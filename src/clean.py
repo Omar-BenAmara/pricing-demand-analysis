@@ -14,6 +14,19 @@ def match_cancelled_orders(raw: pd.DataFrame) -> tuple[pd.Index, pd.Index]:
         raw["Quantity"].gt(0)
         & raw["CustomerID"].notna()
         & raw["InvoiceDate"].notna(),
+        [
+            "InvoiceNo",
+            "CustomerID",
+            "StockCode",
+            "Quantity",
+            "UnitPrice",
+            "InvoiceDate",
+        ],
+    ]
+    positive_lines = positive_lines.loc[
+        ~positive_lines["InvoiceNo"].astype(str).str.startswith("C")
+        & positive_lines["UnitPrice"].gt(0)
+        & positive_lines["StockCode"].str.match(PRODUCT_CODE),
         ["CustomerID", "StockCode", "Quantity", "InvoiceDate"],
     ]
     cancellation_lines = raw.loc[
