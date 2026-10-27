@@ -37,6 +37,7 @@ description, date, and country fields. Customer IDs are missing on some rows.
 
 ## Decisions and rationale
 
+- StockCode is normalized in one loader, `load_raw()`, used by notebooks 02 and 03.
 - Gross product rankings use rows with `Quantity > 0` and `UnitPrice > 0`;
   these are recorded positive quantities, not verified completed sales.
 - Net signed quantity is a separate sensitivity measure: it includes positive
@@ -57,9 +58,9 @@ Notebook 01 inspects raw rows without modifying them. Notebook 03 applies the
 explicit line-level matching rule and reports clean-population checks. Notebook
 02 examines raw positive-population rankings, cancellations, and sensitivity
 to largest-line removal and net signed quantities. The current clean population
-has 524,894 rows, 3,895 products, and 5,351,288 positive units. In that
-population, 3,349 of 3,895 products have multiple observed prices; the counts
-are 2,618 of 3,645 for rows with CustomerID and 2,730 of 3,388 for rows without
+has 524,894 rows, 3,786 products, and 5,351,288 positive units. In that
+population, 3,301 of 3,786 products have multiple observed prices; the counts
+are 2,618 of 3,645 for rows with CustomerID and 2,685 of 3,282 for rows without
 CustomerID.
 
 ## Open issues and next action
