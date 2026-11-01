@@ -15,6 +15,7 @@ causal estimate of demand.
 - `notebooks/archive/02_product_analysis_draft.ipynb` — unchanged earlier analysis
 - `src/clean.py` — reusable cleaning and exact cancellation matching
 - `requirements.txt` — Python dependencies
+- `notebooks/04_partial_returns.ipynb` — classification of unmatched cancellations
 
 ## Dataset facts
 
@@ -34,6 +35,19 @@ description, date, and country fields. Customer IDs are missing on some rows.
 - StockCode `84347` has a -9,360 return dated 2010-12-02 for CustomerID 15838.
   Ten earlier positive rows for this stock code are in the file, but none is
   for that customer; its original sale is before the dataset's start.
+- Matcher validated: 6,074 cancellations (of 8,905 considered) are unmatched after
+  2,831 exact matches. Notebook 04 splits them into 5 groups:
+  4,572 larger earlier purchase (partial-return candidates, 23,914 units);
+  21 equal earlier purchase, all already used by another cancellation (no bug);
+  84 only smaller earlier purchases;
+  1,031 no earlier purchase, product code;
+  366 no earlier purchase, non-product code (POST, D, etc.).
+- Partial returns are about 0.45% of clean units (23,914 of 5,351,288).
+  Decision: no netting function now; documented as a limitation.
+- Dec 2010 + Jan 2011 hold 53% (544) of the 1,031 "no earlier purchase" group
+  but only 18% (1,078) of all unmatched cancellations. This supports the idea
+  that these are returns of sales before the file starts (supported, not proven).
+- This group does not contaminate the clean data: no original sale is in the file.
 
 ## Decisions and rationale
 
@@ -51,24 +65,46 @@ description, date, and country fields. Customer IDs are missing on some rows.
 - Existing exclusions remain: cancellation invoices, non-positive quantities,
   non-positive unit prices, and stock codes outside the product-code pattern.
   Missing-customer rows remain in the clean data but cannot be matched.
+- no partial-return netting for now (about 0.45% of units); documented as a limitation.
 
 ## Current state
 
-Notebook 01 inspects raw rows without modifying them. Notebook 03 applies the
-explicit line-level matching rule and reports clean-population checks. Notebook
-02 examines raw positive-population rankings, cancellations, and sensitivity
-to largest-line removal and net signed quantities. The current clean population
-has 524,894 rows, 3,786 products, and 5,351,288 positive units. In that
-population, 3,301 of 3,786 products have multiple observed prices; the counts
-are 2,618 of 3,645 for rows with CustomerID and 2,685 of 3,282 for rows without
-CustomerID.
+Cancellation-matching topic is closed. Next: within-product price variation,
+separately for rows with and without CustomerID; define what counts as real
+price variation (over time) versus noise.
+
+## Working method (how we decide)
+
+1. State one question. 2. Choose population and unit. 3. Bounded Copilot prompt
+(change only named files, report failed assertions, never edit them to pass).
+4. Validate with a second independent calculation. 5. Interpret: observation vs
+meaning vs limits. 6. One next step. Check which population each number uses
+(an earlier wrong count, 6,010, came from the old matcher; correct is 6,074).
+
+## Git habits
+
+VS Code changes the kernel label in notebooks (Python 3 -> .venv (3.12.10)).
+Check `git diff`, restore that noise, add files by name, never `git add .`.
+Use `git --no-pager` to avoid the pager.
 
 ## Open issues and next action
 
-Exact matching does not identify partial cancellations, changed quantities,
-returns with missing customer IDs, or other unmatched relationships. The
-dataset also omits sales before its start and does not establish whether a
-recorded quantity is actual demand. The next analysis should examine within-
-product price variation separately for rows with a customer ID and rows with a
-missing customer ID, then assess whether comparable price/quantity observations
-can be defined.
+Cancellation matching is closed. The exact rule is validated (see Verified
+findings). Known limits, documented and not fixed:
+
+- Partial returns (about 4,572 cancellation lines, 23,914 units, 0.45% of clean
+  units) are not netted. Candidates only; the link to a purchase is not proven.
+- 84 cancellations are larger than any single earlier purchase; 21 are second
+  cancellations of an already-used purchase.
+- Returns without an earlier sale (1,031 product-code lines) are mostly explained
+  by sales before the file starts (supported, not proven). They do not
+  contaminate the clean data.
+- 383 cancellation lines with missing CustomerID cannot be matched.
+- Recorded quantity is not verified demand. The file has only one year.
+
+Next action: examine within-product price variation separately for rows with a
+CustomerID and rows without one. First define what counts as real price
+variation (a price that holds over a period of time) versus noise (single odd
+lines, bulk or special prices). Then check whether comparable price and
+quantity observations can be defined for a limited set of products.
+
