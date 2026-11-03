@@ -3,108 +3,146 @@
 ## Objective
 
 Explore how observed unit price relates to recorded quantity for comparable
-products in the Online Retail dataset. This is descriptive analysis, not a
-causal estimate of demand.
+products in the UCI Online Retail data. This is descriptive analysis, not a
+causal estimate of demand: recorded quantities are not verified demand or
+necessarily completed sales.
 
-## Repository structure
+## Data
 
-- `data/raw/Online Retail.xlsx` — source workbook
-- `notebooks/01_data_understanding.ipynb` — raw-data inspection
-- `notebooks/03_clean_foundation.ipynb` — matching rule, clean population, and diagnostics
-- `notebooks/02_product_analysis.ipynb` — product rankings and sensitivity checks
-- `notebooks/archive/02_product_analysis_draft.ipynb` — unchanged earlier analysis
-- `src/clean.py` — reusable cleaning and exact cancellation matching
-- `requirements.txt` — Python dependencies
-- `notebooks/04_partial_returns.ipynb` — classification of unmatched cancellations
+`data/raw/Online Retail.xlsx` contains 541,909 invoice-line rows and eight
+fields, dated 2010-12-01 through 2011-12-09. The initial inspection found
+25,900 invoices, 4,070 stock codes, 38 countries, 135,080 rows with missing
+`CustomerID`, 10,624 negative-quantity rows, 2,515 zero-price rows, and two
+negative-price rows. These are observed data characteristics, not standalone
+reasons to exclude a row.
 
-## Dataset facts
+## Repository map
 
-The workbook has 541,909 invoice-line rows covering 2010-12-01 through
-2011-12-09. It contains invoice, stock code, quantity, unit price, customer,
-description, date, and country fields. Customer IDs are missing on some rows.
+- `notebooks/01_data_understanding.ipynb` — raw-data profile and transaction
+  anomaly investigation; preserves the raw frame.
+- `notebooks/02_cleaning.ipynb` — current consolidated analysis: product
+  rankings and sensitivity, clean-row waterfall, exact cancellation matching,
+  and unmatched-cancellation diagnostics.
+- `notebooks/archive/` — earlier product-analysis, cleaning-foundation, and
+  partial-return notebooks retained for history, not the current run order.
+- `src/clean.py` — reusable stock-code normalization, cancellation matcher,
+  and clean-data loader.
+- `data/raw/Online Retail.xlsx` — source workbook.
+- `requirements.txt` — pinned Python environment dependencies.
+- `readme.md` — project overview and setup.
 
-## Verified findings
+The latest reorganization commit replaced the previous numbered analysis
+notebooks with `02_cleaning.ipynb` and moved those predecessors to `archive/`.
+Run the current notebooks in order: `01_data_understanding.ipynb`, then
+`02_cleaning.ipynb`.
 
-- StockCode `23843` has a positive 80,995-unit row on invoice `581483` and an
-  equal -80,995-unit cancellation on `C581484`, for the same customer.
-- StockCode `23166` has a 74,215-unit positive line out of 78,033 positive-price
-  units. The exact rule matches five eligible positive lines for this code
-  (74,215, 240, 1, 12, and 12 units), each to an earlier cancellation for the
-  same customer. Thus the exact rule removes more than the 74,215-unit line
-  alone; it removes 265 additional units across four other matched lines.
-- StockCode `84347` has a -9,360 return dated 2010-12-02 for CustomerID 15838.
-  Ten earlier positive rows for this stock code are in the file, but none is
-  for that customer; its original sale is before the dataset's start.
-- Matcher validated: 6,074 cancellations (of 8,905 considered) are unmatched after
-  2,831 exact matches. Notebook 04 splits them into 5 groups:
-  4,572 larger earlier purchase (partial-return candidates, 23,914 units);
-  21 equal earlier purchase, all already used by another cancellation (no bug);
-  84 only smaller earlier purchases;
-  1,031 no earlier purchase, product code;
-  366 no earlier purchase, non-product code (POST, D, etc.).
-- Partial returns are about 0.45% of clean units (23,914 of 5,351,288).
-  Decision: no netting function now; documented as a limitation.
-- Dec 2010 + Jan 2011 hold 53% (544) of the 1,031 "no earlier purchase" group
-  but only 18% (1,078) of all unmatched cancellations. This supports the idea
-  that these are returns of sales before the file starts (supported, not proven).
-- This group does not contaminate the clean data: no original sale is in the file.
+## Work completed and verified findings
+
+### Raw-data and ranking investigation
+
+- The initial notebook profiles transaction types and missing values without
+  filtering or overwriting the raw frame. Invoice-line count, invoice count,
+  and item quantity are distinct measures.
+- In the raw positive-quantity, positive-price ranking, StockCode `23843` has
+  an 80,995-unit line with an equal cancellation for the same customer.
+  StockCode `23166` has 78,033 positive-price units, of which one line is
+  74,215 units (95.1%) and has an exact earlier-sale/cancellation match.
+- Ranking results change materially when the largest line is removed or signed
+  quantities are netted. These are population-sensitive recorded-quantity
+  summaries, not evidence that the underlying transactions were erroneous.
+- StockCode `84347` has a -9,360 return shortly after the file begins. Ten
+  positive lines for that product occur in the file, but none is an earlier
+  purchase for the cancellation's customer. An earlier purchase may predate
+  the file; that explanation is plausible, not proven.
+
+### Cleaning and cancellation diagnostics
+
+The current clean-row waterfall applies these four filters in order:
+
+1. Exclude invoices whose number starts with `C`.
+2. Keep `Quantity > 0` and `UnitPrice > 0`.
+3. Keep product-like stock codes matching five digits plus optional letters.
+4. Remove positive lines matched to an earlier cancellation for the same
+   customer, stock code, and exact quantity.
+
+The waterfall is **541,909 → 532,621 → 530,104 → 527,725 → 524,894 rows**.
+The clean population contains 3,786 products and 5,351,288 positive units.
+Rows with missing `CustomerID` are retained in the clean population; they
+cannot participate in customer-based cancellation matching. The matcher
+diagnostics separately report 383 `C`-invoice cancellation rows with missing
+`CustomerID`; these are outside the 8,905 cancellations considered.
+
+`src/clean.py` strips and uppercases stock codes in `load_raw()`. The matcher
+uses only eligible product-code lines and cancellations with a `C` prefix,
+negative quantity, positive price, and present customer ID. It matches each
+cancellation to at most one unused, strictly earlier positive line with the
+same customer, normalized stock code, and exact absolute quantity, choosing
+the closest earlier candidate. Only matched positive lines are removed;
+unmatched and partial-return candidates are not netted. Added `line_value`
+means quantity multiplied by unit price (recorded value, not verified
+revenue), and `week` is the invoice week start.
+
+Of 8,905 cancellation lines considered, 2,831 matched and 6,074 did not.
+The unmatched screen groups these into:
+
+- 4,572 with a larger earlier eligible purchase (23,914 cancellation units);
+  these are possible partial-return candidates, not confirmed links.
+- 21 with an equal-quantity earlier line that had already been used by another
+  cancellation.
+- 84 with only smaller earlier eligible purchases.
+- 1,031 with no earlier eligible same-customer, same-product purchase in the
+  file and a product-like stock code.
+- 366 with no earlier purchase in the file and a non-product stock code.
+
+The 1,031 group is concentrated near the beginning of the file: 544 occur in
+December 2010 and January 2011 (about 53% of that group), versus 1,068 of all
+6,074 unmatched cancellations (about 18%) in those months. This pattern is
+consistent with some returns referring to pre-file sales, but does not prove
+that explanation.
+
+The 23,914 candidate units are about **0.45% of the 5,351,288 clean units**;
+this is a scale comparison, not a verified return rate. The 1,031
+no-earlier-purchase cancellations total 18,053 returned units, about 0.34% of
+the 5,351,288 clean units, and some may refer to purchases before the file
+begins.
+The 1,031 lines without an earlier purchase in the file may include returns
+whose sales occurred before the file begins. Absence of an earlier in-file
+purchase does not establish that no purchase occurred.
 
 ## Decisions and rationale
 
-- StockCode is normalized in one loader, `load_raw()`, used by notebooks 02 and 03.
-- Gross product rankings use rows with `Quantity > 0` and `UnitPrice > 0`;
-  these are recorded positive quantities, not verified completed sales.
-- Net signed quantity is a separate sensitivity measure: it includes positive
-  and negative quantities but only rows with `UnitPrice > 0`. It is not mixed
-  with gross rankings.
-- Cleaning removes a positive line only when a cancellation can be matched
-  one-to-one to an earlier positive line for the same customer and stock code
-  with exactly the same absolute quantity. Of available candidates, the closest
-  earlier line is used. This replaces product-level return-rate thresholds,
-  which removed normal sales along with unusual transactions.
-- Existing exclusions remain: cancellation invoices, non-positive quantities,
-  non-positive unit prices, and stock codes outside the product-code pattern.
-  Missing-customer rows remain in the clean data but cannot be matched.
-- no partial-return netting for now (about 0.45% of units); documented as a limitation.
+- Gross product rankings use rows with positive quantity and positive unit
+  price. They describe recorded positive quantities, not verified demand.
+- Signed net quantity is reported separately and includes only rows with
+  positive unit price; do not mix it with gross rankings.
+- Remove a positive line only on a one-to-one, earlier, exact-quantity match
+  for the same identified customer and normalized stock code. Do not remove
+  products based on unusual-volume or return-rate thresholds.
+- Keep positive rows with missing customer IDs. Do not impute customer
+  identity or imply that they were matchable to returns.
+- Treat larger-earlier-line cases as candidates only. Do not net partial
+  returns or claim the matching algorithm proves the true business event.
+- Treat `line_value` as a derived recorded amount, not verified revenue.
 
-## Current state
+## Current status and next steps
 
-Cancellation-matching topic is closed. Next: within-product price variation,
-separately for rows with and without CustomerID; define what counts as real
-price variation (over time) versus noise.
+Raw-data inspection, product-ranking sensitivity, cleaning, exact matching,
+and unmatched-return diagnostics are complete. A within-product price/quantity
+analysis has **not** yet been completed. Next, inspect whether product prices
+persist over time versus appearing as isolated, bulk, or special-price lines.
+Then define comparable product-level observations and assess price/quantity
+patterns separately for rows with and without `CustomerID`, with appropriate
+time and customer-composition caveats. Keep any observed association
+descriptive; do not claim a causal price effect.
 
-## Working method (how we decide)
+## Continuation conventions
 
-1. State one question. 2. Choose population and unit. 3. Bounded Copilot prompt
-(change only named files, report failed assertions, never edit them to pass).
-4. Validate with a second independent calculation. 5. Interpret: observation vs
-meaning vs limits. 6. One next step. Check which population each number uses
-(an earlier wrong count, 6,010, came from the old matcher; correct is 6,074).
-
-## Git habits
-
-VS Code changes the kernel label in notebooks (Python 3 -> .venv (3.12.10)).
-Check `git diff`, restore that noise, add files by name, never `git add .`.
-Use `git --no-pager` to avoid the pager.
-
-## Open issues and next action
-
-Cancellation matching is closed. The exact rule is validated (see Verified
-findings). Known limits, documented and not fixed:
-
-- Partial returns (about 4,572 cancellation lines, 23,914 units, 0.45% of clean
-  units) are not netted. Candidates only; the link to a purchase is not proven.
-- 84 cancellations are larger than any single earlier purchase; 21 are second
-  cancellations of an already-used purchase.
-- Returns without an earlier sale (1,031 product-code lines) are mostly explained
-  by sales before the file starts (supported, not proven). They do not
-  contaminate the clean data.
-- 383 cancellation lines with missing CustomerID cannot be matched.
-- Recorded quantity is not verified demand. The file has only one year.
-
-Next action: examine within-product price variation separately for rows with a
-CustomerID and rows without one. First define what counts as real price
-variation (a price that holds over a period of time) versus noise (single odd
-lines, bulk or special prices). Then check whether comparable price and
-quantity observations can be defined for a limited set of products.
-
+- Check which population and unit each reported number uses; distinguish rows,
+  invoices, products, lines, and units.
+- Preserve the raw workbook/frame. Make cleaning choices explicit and validate
+  counts with assertions or an independent calculation.
+- Separate direct observations from interpretations and state uncertainty,
+  especially for cancellation linkage and the file-start boundary.
+- Use the shared helpers in `src/clean.py` rather than duplicating the matcher.
+- Keep changes scoped to requested files, review `git diff`, and stage explicit
+  paths rather than using `git add .`.
