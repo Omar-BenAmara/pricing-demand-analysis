@@ -1,148 +1,141 @@
 # Project context
 
-## Objective
+## Objective and interpretation
 
-Explore how observed unit price relates to recorded quantity for comparable
-products in the UCI Online Retail data. This is descriptive analysis, not a
-causal estimate of demand: recorded quantities are not verified demand or
-necessarily completed sales.
+Describe how observed weekly modal prices relate to recorded invoices and
+units for comparable products in the UCI Online Retail data. This is an
+observational analysis, not a causal estimate of demand. Recorded quantities
+are not verified demand or necessarily completed sales.
 
-## Data
+## Canonical notebook order
 
-`data/raw/Online Retail.xlsx` contains 541,909 invoice-line rows and eight
-fields, dated 2010-12-01 through 2011-12-09. The initial inspection found
-25,900 invoices, 4,070 stock codes, 38 countries, 135,080 rows with missing
-`CustomerID`, 10,624 negative-quantity rows, 2,515 zero-price rows, and two
-negative-price rows. These are observed data characteristics, not standalone
-reasons to exclude a row.
+Run from the repository root, top to bottom:
+
+1. `notebooks/01_data_understanding.ipynb` — raw-data profile, transaction
+   classes, and anomaly investigation; the raw frame is preserved.
+2. `notebooks/02_cleaning.ipynb` — ranking sensitivity, clean-row waterfall,
+   exact cancellation matching, and unmatched-cancellation screening.
+3. `notebooks/03_price_variation.ipynb` — product-week construction, mixed
+   prices, modal-price deviations, persistence, and descriptive correlations.
+4. `notebooks/04_elasticity.ipynb` — model samples, Sample B specifications,
+   robustness checks, broad Sample E within-product models, and price-range
+   terciles.
+
+`notebooks/archive/` holds superseded notebooks; do not include them in the
+current run sequence.
 
 ## Repository map
 
-- `notebooks/01_data_understanding.ipynb` — raw-data profile and transaction
-  anomaly investigation; preserves the raw frame.
-- `notebooks/02_cleaning.ipynb` — current consolidated analysis: product
-  rankings and sensitivity, clean-row waterfall, exact cancellation matching,
-  and unmatched-cancellation diagnostics.
-- `notebooks/archive/` — earlier product-analysis, cleaning-foundation, and
-  partial-return notebooks retained for history, not the current run order.
-- `src/clean.py` — reusable stock-code normalization, cancellation matcher,
-  and clean-data loader.
 - `data/raw/Online Retail.xlsx` — source workbook.
-- `requirements.txt` — pinned Python environment dependencies.
-- `readme.md` — project overview and setup.
+- `notebooks/01_data_understanding.ipynb` through
+  `notebooks/04_elasticity.ipynb` — current analysis sequence.
+- `notebooks/archive/` — historical notebooks.
+- `src/clean.py` — `load_raw`, `load_clean`, `normalize_stock_codes`, and
+  `match_cancelled_orders`.
+- `src/features.py` — `build_product_week`.
+- `src/models.py` — `fit_within_product`.
+- `requirements.txt` — Python dependencies.
+- `readme.md` — project overview, workflow, and key results.
 
-The latest reorganization commit replaced the previous numbered analysis
-notebooks with `02_cleaning.ipynb` and moved those predecessors to `archive/`.
-Run the current notebooks in order: `01_data_understanding.ipynb`, then
-`02_cleaning.ipynb`.
+## Data profile and cleaning decisions
 
-## Work completed and verified findings
+The raw workbook has 541,909 invoice-line rows and eight fields, dated
+2010-12-01 through 2011-12-09. Notebook 01 reports 25,900 invoices, 4,070
+stock codes, 4,372 non-missing customer IDs, 38 countries, and 135,080 rows
+with missing `CustomerID`. It also reports 10,624 negative-quantity rows,
+2,515 zero-price rows, and two negative-price rows. These are observed data
+characteristics, not standalone cleaning rules.
 
-### Raw-data and ranking investigation
-
-- The initial notebook profiles transaction types and missing values without
-  filtering or overwriting the raw frame. Invoice-line count, invoice count,
-  and item quantity are distinct measures.
-- In the raw positive-quantity, positive-price ranking, StockCode `23843` has
-  an 80,995-unit line with an equal cancellation for the same customer.
-  StockCode `23166` has 78,033 positive-price units, of which one line is
-  74,215 units (95.1%) and has an exact earlier-sale/cancellation match.
-- Ranking results change materially when the largest line is removed or signed
-  quantities are netted. These are population-sensitive recorded-quantity
-  summaries, not evidence that the underlying transactions were erroneous.
-- StockCode `84347` has a -9,360 return shortly after the file begins. Ten
-  positive lines for that product occur in the file, but none is an earlier
-  purchase for the cancellation's customer. An earlier purchase may predate
-  the file; that explanation is plausible, not proven.
-
-### Cleaning and cancellation diagnostics
-
-The current clean-row waterfall applies these four filters in order:
+Notebook 02 applies these filters in order:
 
 1. Exclude invoices whose number starts with `C`.
 2. Keep `Quantity > 0` and `UnitPrice > 0`.
-3. Keep product-like stock codes matching five digits plus optional letters.
-4. Remove positive lines matched to an earlier cancellation for the same
-   customer, stock code, and exact quantity.
+3. Keep stock codes matching five digits plus optional letters.
+4. Remove only positive lines matched one-to-one to a strictly earlier
+   cancellation for the same identified customer, stock code, and exact
+   quantity. A positive line can be used once; the closest earlier match is
+   selected.
+5. Retain positive lines with missing `CustomerID`; they cannot participate
+   in customer-based matching.
 
-The waterfall is **541,909 → 532,621 → 530,104 → 527,725 → 524,894 rows**.
-The clean population contains 3,786 products and 5,351,288 positive units.
-Rows with missing `CustomerID` are retained in the clean population; they
-cannot participate in customer-based cancellation matching. The matcher
-diagnostics separately report 383 `C`-invoice cancellation rows with missing
-`CustomerID`; these are outside the 8,905 cancellations considered.
+The printed row waterfall is **541,909 → 532,621 → 530,104 → 527,725 →
+524,894**. The final clean population has 3,786 products and 5,351,288 units.
+The clean loader also adds `line_value` and invoice-week `week`.
 
-`src/clean.py` strips and uppercases stock codes in `load_raw()`. The matcher
-uses only eligible product-code lines and cancellations with a `C` prefix,
-negative quantity, positive price, and present customer ID. It matches each
-cancellation to at most one unused, strictly earlier positive line with the
-same customer, normalized stock code, and exact absolute quantity, choosing
-the closest earlier candidate. Only matched positive lines are removed;
-unmatched and partial-return candidates are not netted. Added `line_value`
-means quantity multiplied by unit price (recorded value, not verified
-revenue), and `week` is the invoice week start.
+The cancellation matcher considered 8,905 lines: 2,831 matched and 6,074
+unmatched. The unmatched screen reports 4,572 larger-earlier-purchase
+candidates with 23,914 cancellation units, 21 with an equal earlier line
+already used, 84 with only smaller earlier purchases, 1,031 with no earlier
+eligible same-customer/same-product purchase in the file and a product-like
+code, and 366 with no earlier purchase and a non-product code. These are
+candidate groupings, not proof of return linkage. The notebook reports 544 of
+the 1,031 product-like no-earlier-purchase cases in December 2010 and January
+2011 (about 53%); pre-file purchases are a possibility, not a conclusion.
 
-Of 8,905 cancellation lines considered, 2,831 matched and 6,074 did not.
-The unmatched screen groups these into:
+## Completed analysis and notebook results
 
-- 4,572 with a larger earlier eligible purchase (23,914 cancellation units);
-  these are possible partial-return candidates, not confirmed links.
-- 21 with an equal-quantity earlier line that had already been used by another
-  cancellation.
-- 84 with only smaller earlier eligible purchases.
-- 1,031 with no earlier eligible same-customer, same-product purchase in the
-  file and a product-like stock code.
-- 366 with no earlier purchase in the file and a non-product stock code.
+### Product-week price variation
 
-The 1,031 group is concentrated near the beginning of the file: 544 occur in
-December 2010 and January 2011 (about 53% of that group), versus 1,068 of all
-6,074 unmatched cancellations (about 18%) in those months. This pattern is
-consistent with some returns referring to pre-file sales, but does not prove
-that explanation.
+Notebook 03 builds 100,068 product-weeks from the clean rows. It reports
+46,112 mixed-price product-weeks (46.08%), containing 4,267,571 units. Among
+these, the lowest-price median line quantity is larger in 38,453 cases
+(83.39%). For products active at least 10 weeks, 2,004 meet the notebook's
+5% price-deviation and activity criteria; 960 have a run of at least three
+consecutive deviating calendar weeks, 489 have only isolated single-week
+deviations, and 555 have a longest run of exactly two.
 
-The 23,914 candidate units are about **0.45% of the 5,351,288 clean units**;
-this is a scale comparison, not a verified return rate. The 1,031
-no-earlier-purchase cancellations total 18,053 returned units, about 0.34% of
-the 5,351,288 clean units, and some may refer to purchases before the file
-begins.
-The 1,031 lines without an earlier purchase in the file may include returns
-whose sales occurred before the file begins. Absence of an earlier in-file
-purchase does not establish that no purchase occurred.
+The notebook also reports median per-product Spearman correlations. For all
+product-weeks, the medians are -0.390 for units, -0.141 for invoices, and
+-0.433 for median line quantity. For single-price product-weeks, they are
+-0.505, -0.194, and -0.482, respectively. These are distributions of
+within-product correlations, not pooled causal effects.
 
-## Decisions and rationale
+### Within-product models
 
-- Gross product rankings use rows with positive quantity and positive unit
-  price. They describe recorded positive quantities, not verified demand.
-- Signed net quantity is reported separately and includes only rows with
-  positive unit price; do not mix it with gross rankings.
-- Remove a positive line only on a one-to-one, earlier, exact-quantity match
-  for the same identified customer and normalized stock code. Do not remove
-  products based on unusual-volume or return-rate thresholds.
-- Keep positive rows with missing customer IDs. Do not impute customer
-  identity or imply that they were matchable to returns.
-- Treat larger-earlier-line cases as candidates only. Do not net partial
-  returns or claim the matching algorithm proves the true business event.
-- Treat `line_value` as a derived recorded amount, not verified revenue.
+Notebook 04's Section 1 filtered modeling base contains 38,653 product-weeks
+across 1,913 products and 641,536 units. This is not the same population as
+broad Sample E. Section 6's eligible Sample E contains 83,377 observations
+across 2,523 products; eligible Sample B contains 5,533 observations across
+348 products.
 
-## Current status and next steps
+`fit_within_product` demeans outcomes and regressors by `StockCode`, includes
+week effects, and clusters standard errors by `StockCode`. The saved notebook
+outputs report:
 
-Raw-data inspection, product-ranking sensitivity, cleaning, exact matching,
-and unmatched-return diagnostics are complete. A within-product price/quantity
-analysis has **not** yet been completed. Next, inspect whether product prices
-persist over time versus appearing as isolated, bulk, or special-price lines.
-Then define comparable product-level observations and assess price/quantity
-patterns separately for rows with and without `CustomerID`, with appropriate
-time and customer-composition caveats. Keep any observed association
-descriptive; do not claim a causal price effect.
+| Sample/specification | Outcome | `log_price` coefficient | Clustered SE | Observations | Products |
+|---|---|---:|---:|---:|---:|
+| E, no extra control | `log_invoices` | -0.397409 | 0.014191 | 83,377 | 2,523 |
+| E, no extra control | `log_units` | -1.502479 | 0.024650 | 83,377 | 2,523 |
+| E, controlling for `mode_share_lines` | `log_invoices` | -0.311295 | 0.013345 | 83,377 | 2,523 |
+| B, no extra control | `log_invoices` | -0.332338 | 0.044845 | 5,533 | 348 |
+
+Section 8 adds code to compare `log_invoices` for E, E restricted to
+`mode_share_units >= 0.9`, and B. That new cell has no saved output yet; run
+notebook 04 to render its table.
+
+## Limitations and open work
+
+- Product-weeks with no recorded transactions are absent; zero-sales weeks
+  are not imputed.
+- Weekly modal price can conceal transaction-level prices, discounts, and
+  price tiers.
+- The workbook does not include stock availability or unmet demand.
+- The observed period is limited to the workbook's dates; longer histories
+  could test persistence.
+- Price, seasonality, bulk purchasing, promotions, and customer composition
+  can move together. The notebook estimates associations, not causal effects.
+- If causal inference is pursued, obtain suitable availability/transaction
+  data and specify an identification strategy before interpreting a price
+  effect.
 
 ## Continuation conventions
 
-- Check which population and unit each reported number uses; distinguish rows,
-  invoices, products, lines, and units.
-- Preserve the raw workbook/frame. Make cleaning choices explicit and validate
-  counts with assertions or an independent calculation.
-- Separate direct observations from interpretations and state uncertainty,
-  especially for cancellation linkage and the file-start boundary.
-- Use the shared helpers in `src/clean.py` rather than duplicating the matcher.
-- Keep changes scoped to requested files, review `git diff`, and stage explicit
-  paths rather than using `git add .`.
+- Keep the distinction between rows, invoices, products, product-weeks, and
+  units; report the population attached to every count.
+- Preserve the raw workbook and keep data rules explicit and testable.
+- Use `src.clean`, `src.features`, and `src.models` instead of duplicating
+  shared transformations.
+- Treat unmatched and partial-return cases as candidates, not confirmed
+  cancellation links.
+- Review the focused diff, preserve unrelated worktree changes, and do not
+  commit unless explicitly requested.
