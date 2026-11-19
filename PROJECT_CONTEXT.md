@@ -24,6 +24,8 @@ Run from the repository root, top to bottom:
    terciles.
 5. `notebooks/05_price_tiers.ipynb` — price-ratio summaries and within-product
    estimates by CustomerID status.
+6. `notebooks/06_scenarios_and_figures.ipynb` — scenario analysis and report
+   figures.
 
 `notebooks/archive/` holds superseded notebooks; do not include them in the
 current run sequence.
@@ -32,7 +34,7 @@ current run sequence.
 
 - `data/raw/Online Retail.xlsx` — source workbook.
 - `notebooks/01_data_understanding.ipynb` through
-  `notebooks/05_price_tiers.ipynb` — current analysis sequence.
+  `notebooks/06_scenarios_and_figures.ipynb` — current analysis sequence.
 - `notebooks/archive/` — historical notebooks.
 - `src/clean.py` — `load_raw`, `load_clean`, `normalize_stock_codes`, and
   `match_cancelled_orders`.
@@ -106,10 +108,9 @@ across 2,523 products; eligible Sample B contains 5,533 observations across
 week effects, and clusters standard errors by `StockCode`. The saved notebook
 outputs select within-product OLS with week effects on Sample E. The headline
 `log_invoices` coefficient is -0.397409 (clustered SE 0.014191). Across
-invoice models in Sections 5-8, the coefficient range is -0.493071 to
--0.311295; the lower endpoint is the Section 8 restricted-E estimate
-(`mode_share_units >= 0.9`), and the upper endpoint is Section 6's
-`E-invoices-mode-share` estimate.
+invoice models in Sections 5-8, coefficients range from about -0.31 to -0.49
+across all notebooks: -0.311295 to -0.494630. Sections 5-8 of notebook 04
+alone give -0.493071 to -0.311295.
 
 | Sample/specification | Outcome | `log_price` coefficient | Clustered SE | Observations | Products |
 |---|---|---:|---:|---:|---:|
@@ -150,6 +151,34 @@ near zero, supporting the negative association in the main model under this
 split. This is a sensitivity check, not a causal result or a reason to change
 the main model.
 
+## Figures
+
+- `reports/figures/fig1_cleaning_waterfall.png` — clean-row filtering waterfall.
+- `reports/figures/fig2_price_ratio_by_quantity.png` — price ratios by quantity bucket and CustomerID status.
+- `reports/figures/fig3_coefficient_plot.png` — coefficient estimates with uncertainty intervals.
+- `reports/figures/fig4_example_products.png` — example product price and quantity patterns.
+- `reports/figures/fig5_scenarios.png` — scenario changes in line value across price changes.
+
+## Scenario analysis
+
+Notebook 06 reports All-group line-value scenarios using the invoice
+coefficient as a conservative case, holding units per invoice constant, and
+the units coefficient as an upper bound. Line value is price x quantity, not
+revenue or profit, and there is no cost data. The intervals below are 95% CIs
+from coefficient uncertainty only.
+
+| Price change | Conservative | 95% CI | Upper bound | 95% CI |
+|---:|---:|---:|---:|---:|
+| -10% | -6.152% | [-6.426%, -5.876%] | 5.437% | [4.901%, 5.975%] |
+| -5% | -3.044% | [-3.182%, -2.905%] | 2.611% | [2.357%, 2.865%] |
+| +5% | 2.984% | [2.844%, 3.124%] | -2.422% | [-2.652%, -2.192%] |
+| +10% | 5.911% | [5.631%, 6.193%] | -4.676% | [-5.114%, -4.236%] |
+
+The two bounds have opposite signs, so no price-direction recommendation is
+supported. The units elasticity is probably overstated because large orders
+carry lower prices: 34.7% of identified lines with `Quantity >= 24` are priced
+below the product median.
+
 ## Limitations and open work
 
 - Product-weeks with no recorded transactions are absent; zero-sales weeks
@@ -164,9 +193,15 @@ the main model.
   could test persistence.
 - Price, seasonality, bulk purchasing, promotions, and customer composition
   can move together. The estimates are association, not causal.
-- If causal inference is pursued, obtain suitable availability/transaction
-  data and specify an identification strategy before interpreting a price
-  effect.
+
+## Future work
+
+- Include zero-sales weeks.
+- Obtain transaction-level prices and discounts.
+- Build a Power BI dashboard.
+- Add cost data for profit analysis.
+- Extend the analysis with a longer history.
+- Develop a causal design.
 
 ## Continuation conventions
 
