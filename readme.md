@@ -10,13 +10,24 @@ recorded quantity is not verified demand.
 
 - The headline within-product invoice coefficient is **-0.397409** (clustered
   SE **0.014191**).
-- Across invoice models in Sections 5-8, coefficients range from **-0.31 to
-  -0.49**.
+- Invoice coefficients range from **-0.31 to -0.49 across notebooks 04 and
+  05**.
 - The headline units coefficient is **-1.502479** (clustered SE **0.024650**).
 - **46.08%** of product-weeks contain multiple recorded prices; in **83.39%**
   of those, median line quantity is larger at the lowest price.
 - **34.7%** of identified lines with `Quantity >= 24` are priced below the
   product median.
+
+![Coefficient estimates with uncertainty intervals](reports/figures/fig3_coefficient_plot.png)
+*Coefficient estimates and their uncertainty intervals.*
+
+![Scenario changes in line value](reports/figures/fig5_scenarios.png)
+*Estimated line-value changes under the conservative and upper-bound scenarios.*
+
+## Data source
+
+The source is the UCI Online Retail dataset, provided as `Online Retail.xlsx`
+at the expected path `data/raw/`. The workbook is tracked in this repository.
 
 ## Current notebook workflow
 
@@ -70,10 +81,8 @@ returns.
   quantity is larger at the lowest price than at the highest price.
 - **Final model choice:** within-product OLS with week effects
   (`src.models.fit_within_product`) on Sample E. The headline `log_invoices`
-  coefficient is -0.397409 (clustered SE 0.014191). Across the invoice models
-  in Sections 5-8, coefficients range from about -0.31 to -0.49 across all
-  notebooks: -0.311295 to -0.494630. Sections 5-8 of notebook 04 alone give
-  -0.493071 to -0.311295.
+  coefficient is -0.397409 (clustered SE 0.014191). Invoice coefficients
+  range from about -0.31 to -0.49 across notebooks 04 and 05.
 - **Units and order size:** in Sample E, the `log_units` coefficient is
   -1.502479 (clustered SE 0.024650). In the Sample B decomposition,
   `log_invoices` is -0.332338 (0.044845), while `log_units_per_invoice` is
@@ -138,12 +147,20 @@ python -m pip install -r requirements.txt
 jupyter lab
 ```
 
-Run notebooks 01 through 06 from top to bottom. The analysis is limited to
-recorded transactions: zero-sales weeks are absent, weekly modal prices can
-mix the identified and missing-CustomerID price patterns and hide
-transaction-level variation, the workbook does not report stock availability
-or costs, and recorded quantity is not verified demand. These estimates are
-association, not causal.
+Run notebooks 01 through 06 from top to bottom.
+
+## Limitations
+
+- Product-weeks with zero recorded sales are absent, so the invoice
+  coefficient describes weeks in which the product sold at least once.
+- Weekly modal price is not exogenous: promotions, seasonality, and customer
+  mix can move price and quantity together, so estimates are associations.
+- Weekly modal prices can mix the identified and missing-CustomerID price
+  patterns and hide transaction-level variation.
+- The workbook does not report stock availability or costs, and recorded
+  quantity is not verified demand.
+- The observed period is limited to the workbook's dates; longer histories
+  could test persistence.
 
 ## Future work
 

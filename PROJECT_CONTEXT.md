@@ -107,10 +107,8 @@ across 2,523 products; eligible Sample B contains 5,533 observations across
 `fit_within_product` demeans outcomes and regressors by `StockCode`, includes
 week effects, and clusters standard errors by `StockCode`. The saved notebook
 outputs select within-product OLS with week effects on Sample E. The headline
-`log_invoices` coefficient is -0.397409 (clustered SE 0.014191). Across
-invoice models in Sections 5-8, coefficients range from about -0.31 to -0.49
-across all notebooks: -0.311295 to -0.494630. Sections 5-8 of notebook 04
-alone give -0.493071 to -0.311295.
+`log_invoices` coefficient is -0.397409 (clustered SE 0.014191). Invoice
+coefficients range from about -0.31 to -0.49 across notebooks 04 and 05.
 
 | Sample/specification | Outcome | `log_price` coefficient | Clustered SE | Observations | Products |
 |---|---|---:|---:|---:|---:|
@@ -181,8 +179,8 @@ below the product median.
 
 ## Limitations and open work
 
-- Product-weeks with no recorded transactions are absent; zero-sales weeks
-  are not imputed.
+- Product-weeks with zero recorded sales are absent, so the invoice
+  coefficient describes weeks in which the product sold at least once.
 - Weekly modal price can conceal transaction-level prices, discounts, and
   the distinct price patterns associated with identified and missing
   CustomerID lines.
@@ -191,8 +189,8 @@ below the product median.
 - Recorded quantity is not verified demand.
 - The observed period is limited to the workbook's dates; longer histories
   could test persistence.
-- Price, seasonality, bulk purchasing, promotions, and customer composition
-  can move together. The estimates are association, not causal.
+- Weekly modal price is not exogenous: promotions, seasonality, and customer
+  mix can move price and quantity together, so estimates are associations.
 
 ## Future work
 
